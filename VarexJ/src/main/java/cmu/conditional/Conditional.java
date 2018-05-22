@@ -39,6 +39,8 @@ public abstract class Conditional<T> {
 	private static final Map<BDD, FeatureExpr> cacheNot = new HashMap<>();
 	
 	public static void setFM(final String fmfile) {
+		resetCounters();
+		
 		cacheIsSat.clear();
 		features.clear();
 		cacheNot.clear();
@@ -52,59 +54,6 @@ public abstract class Conditional<T> {
 		}
 	}
 	
-	public static FeatureExpr not(FeatureExpr a) {
-		return cacheNot.computeIfAbsent(((BDDFeatureExpr)a).bdd(), x -> a.not());
-	}
-	
-	public static FeatureExpr orNot(final FeatureExpr a, final FeatureExpr b) {
-		if (((BDDFeatureExpr)a).bdd() == ((BDDFeatureExpr)b).bdd()) {
-			return FeatureExprFactory.True();
-		}
-		return not(and(not(a), b));
-	}
-	
-	public static FeatureExpr or(final FeatureExpr a, final FeatureExpr b) {
-		if (((BDDFeatureExpr)a).bdd() == ((BDDFeatureExpr)b).bdd()) {
-			return a;
-		}
-		return not(and(not(a), not(b)));
-	}
-	
-	public static FeatureExpr andNot(final FeatureExpr a, final FeatureExpr b) {
-		return and(a, not(b));
-	}
-	
-	public static FeatureExpr and(final FeatureExpr a, final FeatureExpr b) {
-		BDD bddA = ((BDDFeatureExpr)a).bdd();
-		BDD bddB = ((BDDFeatureExpr)b).bdd();
-		if (bddA == bddB) {
-			return a;
-		}
-		if (bddA.hashCode() > bddB.hashCode()) {
-			bddA = bddB;
-			bddB = ((BDDFeatureExpr)a).bdd();
-		}
-		Map<BDD, FeatureExpr> aMap = cacheAnd.get(bddA);
-		if (aMap == null) {
-			aMap = new HashMap<>();
-			cacheAnd.put(bddA, aMap);
-		}
-		return aMap.computeIfAbsent(bddB, x -> a.and(b));
-	}
-	
-	public static boolean equals(FeatureExpr a, FeatureExpr b) {
-		if (a == b) return true;
-		return ((BDDFeatureExpr)a).bdd().equals(((BDDFeatureExpr)b).bdd());
-	}
-	
-	public static boolean equivalentTo(FeatureExpr a, FeatureExpr b) {
-		return a.equals(b) || isTautology(equiv(a, b));
-	}
-	
-	private static FeatureExpr equiv(FeatureExpr a, FeatureExpr b) {
-		return or(and(a, b), and(not(a), not(b)));
-	}
-
 	/**
 	 * Creates a BDD from the given feature model.
 	 */
@@ -147,18 +96,142 @@ public abstract class Conditional<T> {
 		features.put(fname, feature);
 		return feature;
 	}
+	
+	public static boolean cache = false;
+	
+	private static void resetCounters() {
+		notCalls = 0;
+		notTime = 0;
+		andCalls = 0;
+		andTime = 0;
+	}
+	
+	private static int notCalls = 0;
+	private static long notTime = 0;
+	
+	private static int andCalls = 0;
+	private static long andTime = 0;
+	
+	private static int contrCalls = 0;
+	private static long contrTime = 0;
+	
+	private static int satCalls = 0;
+	private static long satTime = 0;
+	
+	public static FeatureExpr not(FeatureExpr a) {
+		notCalls++;
+		long start = System.nanoTime();
+		try {
+			if (cache) {
+				return cacheNot.computeIfAbsent(((BDDFeatureExpr)a).bdd(), x -> a.not());
+			} else {
+				return a.not();
+			}
+		} finally {
+			long end = System.nanoTime();
+			long time = end - start;
+			notTime += time;
+		}
+	}
+	
+	public static FeatureExpr orNot(final FeatureExpr a, final FeatureExpr b) {
+		if (((BDDFeatureExpr)a).bdd() == ((BDDFeatureExpr)b).bdd()) {
+			return FeatureExprFactory.True();
+		}
+		return not(and(not(a), b));
+	}
+	
+	public static FeatureExpr or(final FeatureExpr a, final FeatureExpr b) {
+		if (((BDDFeatureExpr)a).bdd() == ((BDDFeatureExpr)b).bdd()) {
+			return a;
+		}
+		return not(and(not(a), not(b)));
+	}
+	
+	public static FeatureExpr andNot(final FeatureExpr a, final FeatureExpr b) {
+		return and(a, not(b));
+	}
+	
+	public static FeatureExpr and(final FeatureExpr a, final FeatureExpr b) {
+		andCalls++;
+		long start = System.nanoTime();
+		try {
+			if (cache) {
+		
+			BDD bddA = ((BDDFeatureExpr)a).bdd();
+			BDD bddB = ((BDDFeatureExpr)b).bdd();
+			if (bddA == bddB) {
+				return a;
+			}
+			if (bddA.hashCode() > bddB.hashCode()) {
+				bddA = bddB;
+				bddB = ((BDDFeatureExpr)a).bdd();
+			}
+			Map<BDD, FeatureExpr> aMap = cacheAnd.get(bddA);
+			if (aMap == null) {
+				aMap = new HashMap<>();
+				cacheAnd.put(bddA, aMap);
+			}
+			return aMap.computeIfAbsent(bddB, x -> a.and(b));
+			}
+			else {
+				return a.and(b);
+			}
+		} finally {
+			long end = System.nanoTime();
+			long time = end - start;
+			andTime += time;
+		} 
+	}
+	
+	public static boolean equals(FeatureExpr a, FeatureExpr b) {
+		if (a == b) return true;
+		return ((BDDFeatureExpr)a).bdd().equals(((BDDFeatureExpr)b).bdd());
+	}
+	
+	public static boolean equivalentTo(FeatureExpr a, FeatureExpr b) {
+		return a.equals(b) || isTautology(equiv(a, b));
+	}
+	
+	private static FeatureExpr equiv(FeatureExpr a, FeatureExpr b) {
+		return or(and(a, b), and(not(a), not(b)));
+	}
 
 	public static final boolean isContradiction(final FeatureExpr f) {
-		final BDD bdd = ((BDDFeatureExpr)f).bdd();
-		final Boolean value = cacheIsSat.get(bdd);
-		if (value != null) {
-			return !value;
-		}
-		return !cacheIsSat.computeIfAbsent(bdd, x -> f.isSatisfiable(fm));
+		contrCalls++;
+		long start = System.nanoTime();
+		try {
+			if (cache) {
+				final BDD bdd = ((BDDFeatureExpr)f).bdd();
+				final Boolean value = cacheIsSat.get(bdd);
+				if (value != null) {
+					return !value;
+				}
+				return !cacheIsSat.computeIfAbsent(bdd, x -> f.isSatisfiable(fm));
+			} else {
+				return !f.isSatisfiable(fm);
+			}
+		} finally {
+			long end = System.nanoTime();
+			long time = end - start;
+			contrTime += time;
+		} 
 	}
 
 	public static final boolean isTautology(final FeatureExpr f) {
-		return !cacheIsSat.computeIfAbsent(((BDDFeatureExpr)not(f)).bdd(), x -> f.not().isSatisfiable(fm));
+		satCalls++;
+		long start = System.nanoTime();
+		try {
+			if (cache) {
+				return !cacheIsSat.computeIfAbsent(((BDDFeatureExpr)not(f)).bdd(), x -> f.not().isSatisfiable(fm));
+			} else { 
+				return f.isTautology(fm);
+			}
+		} finally {
+			long end = System.nanoTime();
+			long time = end - start;
+			satTime += time;
+		} 
 	}
 
 	public abstract T getValue();
@@ -272,6 +345,25 @@ public abstract class Conditional<T> {
 
 	public boolean isOne() {
 		return false;
+	}
+	
+	public static void printstats() {
+		System.out.println("notcalls:" + notCalls);
+		System.out.println("nottime:" + notTime/1_000_000 + "." + notTime%1_000_000 + "ms");
+		System.out.println("notsize:" + cacheNot.size());
+		
+		System.out.println("andcalls:" + andCalls);
+		System.out.println("andtime:" + andTime/1_000_000 + "." + andTime%1_000_000 + "ms");
+		System.out.println("andsize:" + cacheAnd.size());
+
+		System.out.println("contrcalls:" + contrCalls);
+		System.out.println("contrtime:" + contrTime/1_000_000 + "." + contrTime%1_000_000 + "ms");
+		
+		System.out.println("satcalls:" + satCalls);
+		System.out.println("contrtime:" + satTime/1_000_000 + "." + satTime%1_000_000 + "ms");
+		System.out.println("SATsize:" + cacheIsSat.size());
+		
+		System.out.println("time:" + (notTime + andTime + contrTime +satTime) / 1_000_000);
 	}
 	
 }

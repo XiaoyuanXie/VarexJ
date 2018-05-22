@@ -160,6 +160,8 @@ public class RandomSearch extends Search {
 					e.printStackTrace();
 				}
 			}
+			
+			Conditional.printstats();
 			if (JPF.traceMethod != null) {
 				TraceComparator.compare();
 				TraceComparator.clear();

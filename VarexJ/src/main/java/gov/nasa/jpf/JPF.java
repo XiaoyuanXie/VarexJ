@@ -323,7 +323,7 @@ public class JPF implements Runnable {
       
       SHARE_INVOCATIONS = config.getBoolean("invocation");
       
-      
+      Conditional.cache = config.getBoolean("cache", true);
       processInteractionCommand();
       
       // set the trace method
